@@ -23,8 +23,7 @@ def main():
         module = __import__(module_name, fromlist=['run'])
         module.run()
     
-    print(f"\n✓ Готово. Графики сохранены в: {OutputParams.figures_dir}/")
-    print("✓ Данные для таблиц выведены в консоль — скопируйте в отчет")
+    print(f"\nГрафики сохранены в: {OutputParams.figures_dir}/")
 
 if __name__ == "__main__":
     main()
