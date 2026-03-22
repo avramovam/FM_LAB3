@@ -1,149 +1,112 @@
-"""
-Пункт 1.5: Режекторный фильтр
-"""
-
+"""Пункт 1.5: Режектор — все эксперименты для отчета"""
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.fft import fft, fftshift
-
 from config import SignalParams, OutputParams
 from utils import (
     create_rect_pulse, create_noisy_signal, apply_freq_filter,
-    create_notch_mask, plot_results_separate, calculate_mse,
-    plot_filter_mask, plot_mse_analysis
+    notch_mask, calc_mse,
+    plot_time_three, plot_spectrum_before, plot_spectrum_after,
+    plot_mask, plot_mse_line, ensure_dirs
 )
 
-
 def run():
-    """Выполнение пункта 1.5"""
+    ensure_dirs()
+    np.random.seed(42)
 
     t = SignalParams.get_time_array()
     freqs, _ = SignalParams.get_freq_array(len(t))
-
     g = create_rect_pulse(t, SignalParams.a, SignalParams.t1, SignalParams.t2)
     G = fftshift(fft(g))
 
-    # Фиксированные параметры
-    c_fixed = 0.5
-    d_fixed = 20.0
+    c_fixed, d_fixed = 0.5, 20.0
 
-    print("\nИсследование 1: Влияние ширины режектора")
+    # === Исследование 1: ширина режектора ===
+    print("\n[1.5] Режектор: влияние ширины (d=20 Гц, c=0.5)")
+    print(f"{'Δν, Гц':<10} {'MSE':<15} {'Оценка'}")
     print("-" * 40)
 
-    u, _ = create_noisy_signal(g, t, b=0, c=c_fixed, d=d_fixed)
-    U = fftshift(fft(u))
+    widths = [1, 2, 5, 10]
+    w_results = []
 
-    notch_configs = [1, 2, 5, 10]
-    results_width = []
-
-    for width in notch_configs:
-        print(f"\nШирина Δν = {width} Гц")
-
-        u_filtered, mask, _, U_filtered = apply_freq_filter(
-            u, freqs, lambda f: create_notch_mask(f, d_fixed, width)
-        )
-
-        mse = calculate_mse(g, u_filtered)
-        results_width.append({'width': width, 'mse': mse})
-        print(f"  MSE = {mse:.6f}")
-
-        plot_results_separate(
-            t, g, u, u_filtered, freqs, G, U, U_filtered,
-            base_title=f"Режектор: ширина {width} Гц",
-            save_base=f"task1_5_notch_width_{width}"
-        )
-        plot_filter_mask(
-            freqs, mask,
-            title=f"Маска режектора (ширина {width} Гц)",
-            save_path=f"{OutputParams.figures_dir}/task1_5_mask_width_{width}.png"
-        )
-
-    # График MSE от ширины
-    widths = [r['width'] for r in results_width]
-    mses = [r['mse'] for r in results_width]
-    plot_mse_analysis(
-        widths, mses,
-        xlabel="Ширина режектора (Гц)",
-        title=f"Зависимость MSE от ширины режектора (d = {d_fixed} Гц)",
-        save_path=f"{OutputParams.figures_dir}/task1_5_mse_vs_width.png"
-    )
-
-    print("\nИсследование 2: Влияние частоты помехи")
-    print("-" * 40)
-
-    fixed_width = 2
-    d_values = [5, 10, 20, 30, 40]
-    showcase_d = [5, 20, 40]
-
-    for d_val in d_values:
-        print(f"\nЧастота помехи d = {d_val} Гц")
-
-        u, _ = create_noisy_signal(g, t, b=0, c=c_fixed, d=d_val)
+    for w in widths:
+        u = create_noisy_signal(g, t, c=c_fixed, d=d_fixed)
         U = fftshift(fft(u))
+        uf, mask, _, Uf = apply_freq_filter(u, freqs, lambda f: notch_mask(f, d_fixed, w))
+        mse = calc_mse(g, uf)
+        w_results.append((w, mse))
 
-        u_filtered, _, _, U_filtered = apply_freq_filter(
-            u, freqs, lambda f: create_notch_mask(f, d_val, fixed_width)
-        )
+        eval_ = "неполное подавление" if w < 2 else ("оптимально" if w <= 3 else "искажения сигнала")
+        print(f"{w:<10} {mse:<15.6f} {eval_}")
 
-        mse = calculate_mse(g, u_filtered)
-        print(f"  MSE = {mse:.6f}")
+        # График для КАЖДОЙ ширины
+        plot_time_three(t, g, u, uf, f"Режектор: Δν = {w} Гц, d = {d_fixed} Гц",
+                      f"{OutputParams.figures_dir}/task1_5_time_w{w}.png")
+        plot_spectrum_after(freqs, G, Uf, f"Спектр после режектора (Δν={w} Гц)",
+                          f"{OutputParams.figures_dir}/task1_5_spec_after_w{w}.png")
+        plot_mask(freqs, mask, f"АЧХ режектора (Δν = {w} Гц, центр {d_fixed} Гц)",
+                 f"{OutputParams.figures_dir}/task1_5_mask_w{w}.png")
 
-        if d_val in showcase_d:
-            plot_results_separate(
-                t, g, u, u_filtered, freqs, G, U, U_filtered,
-                base_title=f"Режектор: частота помехи {d_val} Гц",
-                save_base=f"task1_5_d_{d_val}"
-            )
+    plot_mse_line([r[0] for r in w_results], [r[1] for r in w_results],
+                 "Ширина режектора Δν, Гц", "Зависимость MSE от Δν (d=20 Гц)",
+                 f"{OutputParams.figures_dir}/task1_5_mse_width.png")
 
-    print("\nИсследование 3: Влияние амплитуды помехи")
+    # === Исследование 2: частота помехи ===
+    print(f"\n[1.5] Режектор: влияние частоты помехи (c=0.5, Δν=2 Гц)")
+    print(f"{'d, Гц':<10} {'MSE':<15} {'Комментарий'}")
     print("-" * 40)
 
-    d_fixed = 20
-    fixed_width = 2
-    c_values = [0.1, 0.5, 1.0, 2.0]
-    showcase_c = [0.1, 0.5, 2.0]
-
-    for c_val in c_values:
-        print(f"\nАмплитуда помехи c = {c_val}")
-
-        u, _ = create_noisy_signal(g, t, b=0, c=c_val, d=d_fixed)
+    d_vals = [5, 10, 20, 30, 40]
+    for d_val in d_vals:
+        u = create_noisy_signal(g, t, c=c_fixed, d=d_val)
         U = fftshift(fft(u))
+        uf, mask, _, Uf = apply_freq_filter(u, freqs, lambda f: notch_mask(f, d_val, 2))
+        mse = calc_mse(g, uf)
 
-        u_filtered, _, _, U_filtered = apply_freq_filter(
-            u, freqs, lambda f: create_notch_mask(f, d_fixed, fixed_width)
-        )
+        comment = "помеха в полосе сигнала" if d_val < 15 else "оптимально"
+        print(f"{d_val:<10} {mse:<15.6f} {comment}")
 
-        mse = calculate_mse(g, u_filtered)
-        print(f"  MSE = {mse:.6f}")
+        # График для ключевых значений
+        if d_val in [5, 20, 40]:
+            plot_time_three(t, g, u, uf, f"Режектор: d = {d_val} Гц",
+                          f"{OutputParams.figures_dir}/task1_5_time_d{d_val}.png")
+            plot_mask(freqs, mask, f"АЧХ режектора (d = {d_val} Гц)",
+                     f"{OutputParams.figures_dir}/task1_5_mask_d{d_val}.png")
 
-        if c_val in showcase_c:
-            plot_results_separate(
-                t, g, u, u_filtered, freqs, G, U, U_filtered,
-                base_title=f"Режектор: амплитуда помехи c = {c_val}",
-                save_base=f"task1_5_c_{c_val}"
-            )
+    # === Исследование 3: амплитуда помехи ===
+    print(f"\n[1.5] Режектор: влияние амплитуды (d=20 Гц, Δν=2 Гц)")
+    print(f"{'c':<10} {'MSE':<15} {'MSE/c²'}")
+    print("-" * 40)
 
-    # График MSE от амплитуды
-    c_vals = c_values
-    mses_c = [0.005138, 0.125639, 0.502207, 2.008477]  # Из вашего вывода
+    c_vals = [0.1, 0.5, 1.0, 2.0]
+    c_results = []
 
-    plt.figure(figsize=(14, 8))
-    plt.plot(c_vals, mses_c, 'go-', linewidth=2.5, markersize=10)
-    plt.xlabel('Амплитуда помехи c', fontsize=16)
-    plt.ylabel('MSE', fontsize=16)
-    plt.title('Зависимость MSE от амплитуды помехи', fontsize=18, fontweight='bold')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{OutputParams.figures_dir}/task1_5_mse_vs_c.png",
-                dpi=OutputParams.figures_dpi, bbox_inches='tight')
-    plt.close()
+    for c_val in c_vals:
+        u = create_noisy_signal(g, t, c=c_val, d=d_fixed)
+        U = fftshift(fft(u))
+        uf, _, _, Uf = apply_freq_filter(u, freqs, lambda f: notch_mask(f, d_fixed, 2))
+        mse = calc_mse(g, uf)
+        c_results.append((c_val, mse))
 
-    print("\n" + "="*50)
-    print("ВЫВОДЫ ПО ПУНКТУ 1.5")
-    print("="*50)
-    print("""
-    1. Оптимальная ширина режектора: 2-3 Гц
-    2. При малой ширине - неполное подавление
-    3. При большой ширине - искажение сигнала
-    4. Эффективность выше при d > 15 Гц
-    """)
+        ratio = mse / (c_val**2) if c_val > 0 else 0
+        print(f"{c_val:<10} {mse:<15.6f} {ratio:.4f}")
+
+        if c_val in [0.1, 0.5, 2.0]:
+            plot_time_three(t, g, u, uf, f"Режектор: c = {c_val}",
+                          f"{OutputParams.figures_dir}/task1_5_time_c{c_val}.png")
+
+    plot_mse_line([r[0] for r in c_results], [r[1] for r in c_results],
+                 "Амплитуда помехи $c$", "Зависимость MSE от $c$ (Δν=2 Гц)",
+                 f"{OutputParams.figures_dir}/task1_5_mse_c.png")
+
+    # === ТАБЛИЦЫ ДЛЯ ОТЧЕТА ===
+    print("\n[ТАБЛИЦА для 1.5 — ширина режектора]")
+    for w, mse in w_results:
+        print(f"{w} Гц & {mse:.6f} & {'утечка' if w<2 else 'оптимум' if w<=3 else 'искажения'} \\\\")
+
+    print("\n[ТАБЛИЦА — амплитуда помехи]")
+    for c_val, mse in c_results:
+        print(f"{c_val} & {mse:.6f} & MSE/c² = {mse/(c_val**2):.4f} \\\\")
+
+    print("\n[Анализ] MSE ~ c² подтверждается постоянством MSE/c² ≈ 0.5.")
+    print("Оптимальная ширина Δν = 2-3 Гц: меньше — спектральная утечка, больше — искажения.")
+    print("Эффективность максимальна при d > 15 Гц (помеха вне полосы сигнала).")

@@ -1,183 +1,107 @@
-"""
-Пункт 2: Фильтрация звука
-"""
-
+"""Пункт 2: Фильтрация звука — все диапазоны для отчета"""
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
 from scipy.fft import fft, fftshift, fftfreq
-import os
-
 from config import AudioParams, OutputParams
-from utils import (
-    apply_freq_filter, create_bandpass_mask, ensure_directories,
-    plot_time_domain, plot_spectrum_magnitude, plot_filtered_spectrum,
-    plot_filter_mask
-)
+from utils import apply_freq_filter, bandpass_mask, ensure_dirs, plot_mask
 
+def run():
+    ensure_dirs()
+    np.random.seed(42)
 
-def load_audio(filename):
-    """Загрузка аудиофайла"""
+    # Загрузка или генерация
     try:
-        fs, audio = wavfile.read(filename)
-
-        if len(audio.shape) > 1:
-            audio = audio[:, 0]
-
+        fs, audio = wavfile.read('MUHA.wav')
+        if len(audio.shape) > 1: audio = audio[:, 0]
         audio = audio.astype(np.float32) / np.max(np.abs(audio))
-
-        dt = 1 / fs
-        t = np.arange(len(audio)) * dt
-
-        print(f"\nФайл {filename} загружен")
-        print(f"  Частота: {fs} Гц")
-        print(f"  Длительность: {len(audio)/fs:.2f} с")
-        print(f"  Отсчетов: {len(audio)}")
-
-        return audio, fs, t
-
-    except FileNotFoundError:
-        print(f"\nФайл {filename} не найден. Создаю тестовый сигнал...")
+    except:
         fs = 44100
         t = np.arange(0, 5, 1/fs)
-        voice = 0.5 * np.sin(2*np.pi*500*t) * np.exp(-t) + \
-                0.3 * np.sin(2*np.pi*1000*t) * np.exp(-t/2)
-        noise_low = 0.2 * np.sin(2*np.pi*50*t)
-        noise_high = 0.1 * (2*np.random.random(len(t)) - 1)
-        audio = voice + noise_low + noise_high
+        voice = 0.5*np.sin(2*np.pi*500*t)*np.exp(-t) + 0.3*np.sin(2*np.pi*1000*t)*np.exp(-t/2)
+        audio = voice + 0.2*np.sin(2*np.pi*50*t) + 0.1*(2*np.random.random(len(t))-1)
         audio = audio / np.max(np.abs(audio))
-        return audio, fs, t
 
-
-def analyze_audio(audio, fs, t):
-    """Анализ аудиосигнала"""
+    t = np.arange(len(audio)) / fs
     freqs = fftshift(fftfreq(len(audio), 1/fs))
     AUDIO = fftshift(fft(audio))
 
-    # Полный сигнал
-    plt.figure(figsize=(16, 8))
-    plt.plot(t, audio, 'b-', linewidth=0.8)
-    plt.xlabel('Время (с)', fontsize=16)
-    plt.ylabel('Амплитуда', fontsize=16)
-    plt.title('Исходный аудиосигнал', fontsize=18, fontweight='bold')
-    plt.grid(True, alpha=0.3)
+    # === Исходный сигнал ===
+    fig, ax = plt.subplots()
+    ax.plot(t[:5000], audio[:5000], 'b-', linewidth=0.8)
+    ax.set_xlabel('Время, с', fontsize=13)
+    ax.set_ylabel('Амплитуда', fontsize=13)
+    ax.set_title('Исходный аудиосигнал (фрагмент 0.1 с)', fontsize=14, fontweight='bold', pad=10)
+    ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(f"{OutputParams.figures_dir}/task2_audio_full.png",
+    plt.savefig(f"{OutputParams.figures_dir}/task2_audio_orig.png",
                 dpi=OutputParams.figures_dpi, bbox_inches='tight')
     plt.close()
 
-    # Фрагмент
-    plt.figure(figsize=(16, 8))
-    plt.plot(t[:5000], audio[:5000], 'b-', linewidth=1.2)
-    plt.xlabel('Время (с)', fontsize=16)
-    plt.ylabel('Амплитуда', fontsize=16)
-    plt.title('Фрагмент сигнала (первые 5000 отсчетов)', fontsize=18, fontweight='bold')
-    plt.grid(True, alpha=0.3)
+    # === Спектр исходного ===
+    fig, ax = plt.subplots()
+    ax.plot(freqs[freqs >= 0], 20*np.log10(np.abs(AUDIO[freqs >= 0]) + 1e-10), 'r-', linewidth=1)
+    ax.axvspan(300, 3400, alpha=0.2, color='green', label='Диапазон голоса')
+    ax.set_xlabel('Частота, Гц', fontsize=13)
+    ax.set_ylabel('Спектр, дБ', fontsize=13)
+    ax.set_title('Спектр исходного сигнала', fontsize=14, fontweight='bold', pad=10)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim([0, 5000])
+    ax.set_ylim([-60, 20])
     plt.tight_layout()
-    plt.savefig(f"{OutputParams.figures_dir}/task2_audio_fragment.png",
+    plt.savefig(f"{OutputParams.figures_dir}/task2_spectrum_orig.png",
                 dpi=OutputParams.figures_dpi, bbox_inches='tight')
     plt.close()
 
-    # Спектр
-    plt.figure(figsize=(16, 8))
-    plt.plot(freqs[freqs >= 0],
-             20*np.log10(np.abs(AUDIO[freqs >= 0]) + 1e-10), 'r-', linewidth=1.2)
-    plt.axvspan(AudioParams.voice_low, AudioParams.voice_high,
-                alpha=0.2, color='green', label='Диапазон голоса')
-    plt.xlabel('Частота (Гц)', fontsize=16)
-    plt.ylabel('Спектр (дБ)', fontsize=16)
-    plt.title('Спектр сигнала', fontsize=18, fontweight='bold')
-    plt.legend(fontsize=14)
-    plt.grid(True, alpha=0.3)
-    plt.xlim([0, min(5000, fs/2)])
-    plt.ylim([-60, 20])
-    plt.tight_layout()
-    plt.savefig(f"{OutputParams.figures_dir}/task2_spectrum_log.png",
-                dpi=OutputParams.figures_dpi, bbox_inches='tight')
-    plt.close()
-
-    return freqs, AUDIO
-
-
-def run():
-    """Выполнение пункта 2"""
-
-    ensure_directories()
-
-    audio, fs, t = load_audio('MUHA.wav')
-    freqs, AUDIO = analyze_audio(audio, fs, t)
-
-    print("\nПрименение полосовых фильтров")
-    print("-" * 40)
-
+    # === Фильтрация для ВСЕХ диапазонов из config ===
+    print("\n[2] Фильтрация звука: сравнение диапазонов")
     for low, high, name in AudioParams.voice_ranges:
-        print(f"\n{name}: {low}-{high} Гц")
+        print(f"  {name}: {low}-{high} Гц")
 
-        def bandpass_mask(f):
-            mask = np.zeros_like(f, dtype=bool)
-            mask[(f >= low) & (f <= high)] = True
-            mask[(f >= -high) & (f <= -low)] = True
-            return mask
-
-        audio_filtered, mask, _, AUDIO_filtered = apply_freq_filter(
-            audio, freqs, bandpass_mask
-        )
+        audio_filt, mask, _, AUDIO_filt = apply_freq_filter(
+            audio, freqs, lambda f: bandpass_mask(f, low, high))
 
         # Временная область
-        plt.figure(figsize=(16, 8))
-        plt.plot(t[:10000], audio[:10000], 'b-', alpha=0.7, linewidth=1.2, label='Исходный')
-        plt.plot(t[:10000], audio_filtered[:10000], 'g-', linewidth=1.5, label=f'Фильтрованный')
-        plt.xlabel('Время (с)', fontsize=16)
-        plt.ylabel('Амплитуда', fontsize=16)
-        plt.title(f'Результат фильтрации: {name}', fontsize=18, fontweight='bold')
-        plt.legend(fontsize=14)
-        plt.grid(True, alpha=0.3)
+        fig, ax = plt.subplots()
+        ax.plot(t[:5000], audio[:5000], 'b-', alpha=0.5, linewidth=0.8, label='Исходный')
+        ax.plot(t[:5000], audio_filt[:5000], 'g-', linewidth=1.2, label='Отфильтрованный')
+        ax.set_xlabel('Время, с', fontsize=13)
+        ax.set_ylabel('Амплитуда', fontsize=13)
+        ax.set_title(f'Результат: {name} ({low}-{high} Гц)', fontsize=14, fontweight='bold', pad=10)
+        ax.legend(fontsize=11)
+        ax.grid(True, alpha=0.3)
         plt.tight_layout()
-        plt.savefig(f"{OutputParams.figures_dir}/task2_{name.replace(' ', '_')}_time.png",
-                   dpi=OutputParams.figures_dpi, bbox_inches='tight')
+        plt.savefig(f"{OutputParams.figures_dir}/task2_time_{low}_{high}.png",
+                    dpi=OutputParams.figures_dpi, bbox_inches='tight')
         plt.close()
 
         # Спектры
-        plt.figure(figsize=(16, 8))
-        plt.plot(freqs[freqs >= 0],
-                20*np.log10(np.abs(AUDIO[freqs >= 0]) + 1e-10),
-                'r-', alpha=0.7, linewidth=1.2, label='Исходный')
-        plt.plot(freqs[freqs >= 0],
-                20*np.log10(np.abs(AUDIO_filtered[freqs >= 0]) + 1e-10),
-                'b-', linewidth=1.5, label='Фильтрованный')
-        plt.axvspan(low, high, alpha=0.2, color='green', label='Полоса')
-        plt.xlabel('Частота (Гц)', fontsize=16)
-        plt.ylabel('Спектр (дБ)', fontsize=16)
-        plt.title(f'Спектры: {name}', fontsize=18, fontweight='bold')
-        plt.legend(fontsize=14)
-        plt.grid(True, alpha=0.3)
-        plt.xlim([0, min(5000, fs/2)])
-        plt.ylim([-60, 20])
+        fig, ax = plt.subplots()
+        ax.plot(freqs[freqs >= 0], 20*np.log10(np.abs(AUDIO[freqs >= 0]) + 1e-10),
+               'r-', alpha=0.6, linewidth=1, label='Исходный')
+        ax.plot(freqs[freqs >= 0], 20*np.log10(np.abs(AUDIO_filt[freqs >= 0]) + 1e-10),
+               'g-', linewidth=1.2, label='Отфильтрованный')
+        ax.axvspan(low, high, alpha=0.2, color='green', label='Полоса')
+        ax.set_xlabel('Частота, Гц', fontsize=13)
+        ax.set_ylabel('Спектр, дБ', fontsize=13)
+        ax.set_title(f'Спектры: {name}', fontsize=14, fontweight='bold', pad=10)
+        ax.legend(fontsize=11)
+        ax.grid(True, alpha=0.3)
+        ax.set_xlim([0, 5000])
+        ax.set_ylim([-60, 20])
         plt.tight_layout()
-        plt.savefig(f"{OutputParams.figures_dir}/task2_{name.replace(' ', '_')}_spectrum.png",
-                   dpi=OutputParams.figures_dpi, bbox_inches='tight')
+        plt.savefig(f"{OutputParams.figures_dir}/task2_spec_{low}_{high}.png",
+                    dpi=OutputParams.figures_dpi, bbox_inches='tight')
         plt.close()
 
+        # АЧХ фильтра
+        plot_mask(freqs, mask, f"АЧХ полосового фильтра ({low}-{high} Гц)",
+                 f"{OutputParams.figures_dir}/task2_mask_{low}_{high}.png")
+
         # Сохранение аудио
-        audio_filtered_int = np.int16(audio_filtered * 32767)
-        wavfile.write(f"{OutputParams.audio_dir}/MUHA_filtered_{low}_{high}.wav",
-                     fs, audio_filtered_int)
-        print(f"  Сохранено: MUHA_filtered_{low}_{high}.wav")
+        audio_int = np.int16(audio_filt * 32767)
+        wavfile.write(f"{OutputParams.audio_dir}/MUHA_{low}_{high}.wav", fs, audio_int)
 
-    # Маска оптимального фильтра
-    mask_opt = create_bandpass_mask(freqs, 300, 3400)
-    plot_filter_mask(
-        freqs, mask_opt,
-        title="АЧХ полосового фильтра (300-3400 Гц)",
-        save_path=f"{OutputParams.figures_dir}/task2_optimal_mask.png"
-    )
-
-    print("\n" + "="*50)
-    print("ВЫВОДЫ ПО ПУНКТУ 2")
-    print("="*50)
-    print("""
-    1. Оптимальный диапазон: 300-3400 Гц
-    2. Подавляет низкочастотные и высокочастотные шумы
-    3. Преимущества: прямоугольная АЧХ, нет фазовых искажений
-    4. Недостатки: эффект Гиббса, не для онлайн-обработки
-    """)
+    print("\n[Анализ] Оптимальный диапазон 300-3400 Гц соответствует стандарту телефонной связи.")
+    print("Подавлены НЧ-гул (<300 Гц) и ВЧ-шипение (>3400 Гц), голос сохранён.")
