@@ -1,7 +1,7 @@
 """Главный файл: запуск только нужных задач"""
 import numpy as np
 from config import OutputParams
-from utils import ensure_dirs
+from utils import ensure_directories as ensure_dirs
 
 # Задачи для отчета (только они!)
 TASKS = [

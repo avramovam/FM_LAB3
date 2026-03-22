@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from scipy.io import wavfile
 from scipy.fft import fft, fftshift, fftfreq
 from config import AudioParams, OutputParams
-from utils import apply_freq_filter, bandpass_mask, ensure_dirs, plot_mask
+from utils import apply_freq_filter, bandpass_mask, plot_mask
+from utils import ensure_directories as ensure_dirs
 
 def run():
     ensure_dirs()

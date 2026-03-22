@@ -1,19 +1,25 @@
-"""Пункт 1.9: ФВЧ — все эксперименты для отчета"""
+"""
+Пункт 1.9: Фильтр верхних частот (ФВЧ)
+ИСПРАВЛЕННАЯ ВЕРСИЯ
+"""
 import numpy as np
 from scipy.fft import fft, fftshift
 from config import SignalParams, OutputParams
 from utils import (
     create_rect_pulse, create_noisy_signal, apply_freq_filter,
-    hpf_mask, calc_mse,
-    plot_time_three, plot_mask, plot_mse_line, ensure_dirs
+    hpf_mask, calculate_mse,
+    plot_time_three, plot_mask, plot_mse_line, ensure_directories
 )
 
+
 def run():
-    ensure_dirs()
+    """Выполнение пункта 1.9"""
+    ensure_directories()
     np.random.seed(42)
 
     t = SignalParams.get_time_array()
     freqs, _ = SignalParams.get_freq_array(len(t))
+
     g = create_rect_pulse(t, SignalParams.a, SignalParams.t1, SignalParams.t2)
 
     b_val = 0.1
@@ -27,22 +33,36 @@ def run():
     results = []
 
     for nu0 in cutoffs:
-        uf, mask, _, _ = apply_freq_filter(u, freqs, lambda f: hpf_mask(f, nu0))
-        mse = calc_mse(g, uf)
+        uf, mask, _, _ = apply_freq_filter(
+            u, freqs, lambda f: hpf_mask(f, nu0)
+        )
+        mse = calculate_mse(g, uf)
         results.append((nu0, mse))
 
         desc = "форма угадывается" if nu0 < 1 else ("только фронты" if nu0 < 5 else "сигнал подавлен")
         print(f"{nu0:<10} {mse:<15.6f} {desc}")
 
         # График для КАЖДОГО ν₀
-        plot_time_three(t, g, u, uf, f"ФВЧ: $\\nu_0$ = {nu0} Гц",
-                      f"{OutputParams.figures_dir}/task1_9_time_nu0{nu0}.png")
-        plot_mask(freqs, mask, f"АЧХ ФВЧ ($\\nu_0$ = {nu0} Гц)",
-                 f"{OutputParams.figures_dir}/task1_9_mask_nu0{nu0}.png")
+        plot_time_three(
+            t, g, u, uf,
+            title=f"ФВЧ: ν₀ = {nu0} Гц",
+            save_path=f"{OutputParams.figures_dir}/task1_9_time_nu0{nu0}.png",
+            ylim=(-1.0, 2.0)
+        )
 
-    plot_mse_line([r[0] for r in results], [r[1] for r in results],
-                 "Частота среза ФВЧ $\\nu_0$, Гц", "Зависимость MSE от $\\nu_0$ (ФВЧ)",
-                 f"{OutputParams.figures_dir}/task1_9_mse.png")
+        plot_mask(
+            freqs, mask,
+            title=f"АЧХ ФВЧ (ν₀ = {nu0} Гц)",
+            save_path=f"{OutputParams.figures_dir}/task1_9_mask_nu0{nu0}.png"
+        )
 
-    print("\n[Анализ] ФВЧ удаляет низкочастотный сигнал — для прямоугольного импульса это разрушительно.")
-    print("При ν₀ > 5 Гц полезный сигнал полностью подавлен, MSE выходит на плато ≈ 0.2.")
+    plot_mse_line(
+        [r[0] for r in results], [r[1] for r in results],
+        "Частота среза ФВЧ ν₀, Гц", "Зависимость MSE от ν₀ (ФВЧ)",
+        f"{OutputParams.figures_dir}/task1_9_mse.png"
+    )
+
+    print("\n[ВЫВОДЫ 1.9]")
+    print("• ФВЧ разрушает низкочастотный сигнал")
+    print("• При ν₀ > 5 Гц — полное подавление")
+    print("• Неприменим для данной задачи")
