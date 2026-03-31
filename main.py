@@ -1,9 +1,11 @@
-"""Главный файл: запуск только нужных задач"""
+"""
+Главный файл для запуска всех заданий
+"""
 import numpy as np
 from config import OutputParams
-from utils import ensure_directories as ensure_dirs
+from utils import ensure_directories
 
-# Задачи для отчета (только они!)
+# Список заданий для выполнения
 TASKS = [
     ("1.3 ФНЧ", "task_1_3_lpf"),
     ("1.5 Режектор", "task_1_5_notch"),
@@ -13,17 +15,18 @@ TASKS = [
 ]
 
 def main():
-    np.random.seed(42)  # Воспроизводимость
-    ensure_dirs()
-    
-    print("=== ЛР3: Жесткая фильтрация (минималистичная версия) ===")
-    
+    """Запускает все задания лабораторной работы"""
+    np.random.seed(42)          # фиксируем генератор для воспроизводимости
+    ensure_directories()        # создаем папки для результатов
+
+    print("=== ЛР3: Жесткая фильтрация ===")
+
     for name, module_name in TASKS:
         print(f"\n>>> Запуск: {name}")
         module = __import__(module_name, fromlist=['run'])
         module.run()
-    
-    print(f"\nГрафики сохранены в: {OutputParams.figures_dir}/")
+
+    print(f"\nГотово. Графики сохранены в: {OutputParams.figures_dir}/")
 
 if __name__ == "__main__":
     main()

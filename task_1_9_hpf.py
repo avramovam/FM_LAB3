@@ -1,6 +1,5 @@
 """
 Пункт 1.9: Фильтр верхних частот (ФВЧ)
-ИСПРАВЛЕННАЯ ВЕРСИЯ
 """
 import numpy as np
 from scipy.fft import fft, fftshift
@@ -26,8 +25,8 @@ def run():
     u = create_noisy_signal(g, t, b=b_val)
 
     print("\n[1.9] ФВЧ: влияние частоты среза")
-    print(f"{'ν₀, Гц':<10} {'MSE':<15} {'Характеристика'}")
-    print("-" * 40)
+    print(f"{'ν₀, Гц':<10} {'MSE':<15}")
+    print("-" * 30)
 
     cutoffs = [0.5, 2, 5, 10, 20]
     results = []
@@ -39,10 +38,8 @@ def run():
         mse = calculate_mse(g, uf)
         results.append((nu0, mse))
 
-        desc = "форма угадывается" if nu0 < 1 else ("только фронты" if nu0 < 5 else "сигнал подавлен")
-        print(f"{nu0:<10} {mse:<15.6f} {desc}")
+        print(f"{nu0:<10} {mse:<15.6f}")
 
-        # График для КАЖДОГО ν₀
         plot_time_three(
             t, g, u, uf,
             title=f"ФВЧ: ν₀ = {nu0} Гц",
@@ -61,8 +58,3 @@ def run():
         "Частота среза ФВЧ ν₀, Гц", "Зависимость MSE от ν₀ (ФВЧ)",
         f"{OutputParams.figures_dir}/task1_9_mse.png"
     )
-
-    print("\n[ВЫВОДЫ 1.9]")
-    print("• ФВЧ разрушает низкочастотный сигнал")
-    print("• При ν₀ > 5 Гц — полное подавление")
-    print("• Неприменим для данной задачи")

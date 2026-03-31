@@ -1,6 +1,5 @@
 """
 Пункт 1.7: Комбинированная фильтрация
-ИСПРАВЛЕННАЯ ВЕРСИЯ — синий ФНЧ виден на графике сравнения
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,7 +31,7 @@ def run():
     print("\n[1.7] Сравнение фильтров")
     print("-" * 40)
 
-    # === Создаём все три фильтра ===
+    # применение трех типов фильтров
     u_lpf, mask_lpf, _, U_lpf = apply_freq_filter(
         u, freqs, lambda f: lpf_mask(f, 12)
     )
@@ -52,8 +51,7 @@ def run():
     print(f"Режектор: MSE = {mse_notch:.4f}")
     print(f"Комбинированный: MSE = {mse_comb:.4f}")
 
-    # === КЛЮЧЕВОЙ ГРАФИК: сравнение трёх фильтров ===
-    # Используем исправленную функцию с правильным порядком отрисовки
+    # сравнение фильтров во временной области
     plot_comparison_filters(
         t, g, u_lpf, u_notch, u_comb,
         mse_lpf, mse_notch, mse_comb,
@@ -62,7 +60,7 @@ def run():
         xlim=(-2, 2)
     )
 
-    # === Детальные графики комбинированного фильтра ===
+    # комбинированный фильтр: временная область
     plot_time_three(
         t, g, u, u_comb,
         title="Комбинированный фильтр: временная область",
@@ -70,26 +68,65 @@ def run():
         ylim=(-0.3, 1.3)
     )
 
+    # спектры до фильтрации
     plot_spectrum_before(
         freqs, G, U,
         title="Спектры до фильтрации",
         save_path=f"{OutputParams.figures_dir}/task1_7_spec_before.png"
     )
 
+    # спектры после комбинированной фильтрации
     plot_spectrum_after(
         freqs, G, U_comb,
         title="Спектры после комбинированного фильтра",
         save_path=f"{OutputParams.figures_dir}/task1_7_spec_after.png"
     )
 
-    # === АЧХ комбинированного фильтра ===
+    # АЧХ комбинированного фильтра (ФНЧ 25 Гц для наглядности)
+    mask_comb_viz = combined_mask(freqs, 25, d_val, 2)
+
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.plot(freqs, mask_comb_viz.astype(float), color='#000000', linewidth=3,
+            label='Комбинированный фильтр')
+    ax.fill_between(freqs, 0, mask_comb_viz.astype(float), alpha=0.3, color='gray')
+
+    ax.axvspan(d_val-2, d_val+2, alpha=0.3, color='red', label='Режектор 20±2 Гц')
+    ax.axvspan(-d_val-2, -d_val+2, alpha=0.3, color='red')
+    ax.axvline(x=25, color='blue', linestyle='--', linewidth=2, label='ФНЧ 25 Гц')
+    ax.axvline(x=-25, color='blue', linestyle='--', linewidth=2)
+
+    ax.set_xlabel('Частота, Гц', fontsize=20, fontweight='bold')
+    ax.set_ylabel('Коэффициент передачи', fontsize=20, fontweight='bold')
+    ax.set_title('АЧХ комбинированного фильтра: ФНЧ + режектор',
+                fontsize=22, fontweight='bold', pad=15)
+    ax.legend(fontsize=18, loc='upper right', framealpha=0.9)
+    ax.grid(True, alpha=0.4, linestyle='--', linewidth=1.2)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.tick_params(width=1.2, length=6, labelsize=18)
+    ax.set_xlim(-30, 30)
+    ax.set_ylim(-0.15, 1.15)
+    ax.set_yticks([0, 1])
+
+    plt.tight_layout()
+    plt.savefig(f"{OutputParams.figures_dir}/task1_7_combined_mask.png",
+                dpi=OutputParams.figures_dpi, bbox_inches='tight')
+    plt.close()
+
+    # компоненты комбинированного фильтра
     plot_mask(
-        freqs, mask_comb,
-        title="АЧХ комбинированного фильтра: ФНЧ 12 Гц + режектор 20±2 Гц",
-        save_path=f"{OutputParams.figures_dir}/task1_7_combined_mask.png"
+        freqs, lpf_mask(freqs, 12),
+        title="АЧХ ФНЧ (компонента комбинированного)",
+        save_path=f"{OutputParams.figures_dir}/task1_7_mask_lpf_component.png"
     )
 
-    # === Влияние соотношения шумов ===
+    plot_mask(
+        freqs, notch_mask(freqs, d_val, 2),
+        title="АЧХ режектора (компонента комбинированного)",
+        save_path=f"{OutputParams.figures_dir}/task1_7_mask_notch_component.png"
+    )
+
+    # влияние соотношения белого шума и гармонической помехи
     print("\n[1.7] Влияние соотношения шумов")
     b_vals = [0.1, 0.2, 0.5]
     c_vals = [0.2, 0.5, 1.0]
@@ -106,8 +143,8 @@ def run():
     plot_mse_heatmap(b_vals, c_vals, mse_mat,
                     f"{OutputParams.figures_dir}/task1_7_heatmap.png")
 
-    # === Вывод для таблицы отчета ===
-    print("\n[ТАБЛИЦА 7 — для отчета]")
+    # результаты для отчета
+    print("\n[ТАБЛИЦА] Зависимость MSE от b и c:")
     header = "b \\ c"
     print(f"{header:<8} {'0.2':<12} {'0.5':<12} {'1.0':<12}")
     print("-" * 40)
@@ -117,7 +154,6 @@ def run():
             row += f"{mse_mat[i, j]:<12.4f}"
         print(row)
 
-    print("\n[ВЫВОДЫ 1.7]")
-    print("• Комбинированный фильтр эффективнее простых")
-    print("• Оптимально: ФНЧ 12 Гц + режектор 20±2 Гц")
-    print("• MSE ≈ αb² + βc², где β ≈ 5α — гармоника влияет сильнее")
+
+if __name__ == "__main__":
+    run()
